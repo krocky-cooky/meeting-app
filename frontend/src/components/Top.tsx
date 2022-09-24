@@ -4,10 +4,10 @@ import Webcam from "react-webcam";
 import * as faceapi from 'face-api.js';
 import Button from '@material-ui/core/Button';
 import {ResponsiveContainer,Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
-// import { Surface } from "gl-react-dom";
-// import { Node, GLSL } from "gl-react";
+
 
 import "../css/Top.css" 
+import { styled } from '@material-ui/core';
 
 
 
@@ -15,13 +15,20 @@ export const Top = () => {
     //show all cameras by deviceid
     const [deviceId, setDeviceId] = React.useState<string>("");
     const [devices, setDevices] = React.useState<MediaDeviceInfo[]>([]);
-    const audioState = React.useRef<boolean>(true);
     const [audioTracks, setAudioTracks] = React.useState<MediaStreamTrack[]>([]);
     const audioContext = React.useRef<AudioContext>();
     const sourceNode = React.useRef<MediaStreamAudioSourceNode>();
     const analyserNode = React.useRef<AnalyserNode>();
     const [audioData, setAudioData] = React.useState<Uint8Array>();
-    // const glsl = require("./index.frag").default;
+    const canvasRef = useRef<HTMLCanvasElement>(null)
+    const animeIdRef = useRef<number>();
+    const [isCaptureEnable, setCaptureEnable] = useState<boolean>(false);
+    const isCaptureEnableRef = React.useRef<boolean>(isCaptureEnable);
+    useEffect(() => {
+        isCaptureEnableRef.current = isCaptureEnable;
+      }, [isCaptureEnable]);
+    const webcamRef = useRef<Webcam>(null);
+    const defaultRaderData = 0.5;
     const videoConstraints = {
         width: 720,
         height: 400,
@@ -40,7 +47,7 @@ export const Top = () => {
         sourceNode.current = audioContext.current.createMediaStreamSource(stream);
         analyserNode.current = audioContext.current.createAnalyser();
         audioContext.current.resume();
-        analyserNode.current.fftSize = 1024;
+        analyserNode.current.fftSize = 128;
         sourceNode.current.connect(analyserNode.current);
     };
 
@@ -49,23 +56,24 @@ export const Top = () => {
     };
 
     
-    // React.useEffect(
-    //     () => {
-    //         if(!audioState.current) {
-    //             navigator.mediaDevices.getUserMedia(
-    //                 {audio: true}
-    //                 )
-    //                 .then(handleAudioSuccess)
-    //                 .catch(handleAudioError);
-    //         }else {
-    //             if(audioTracks) {
-    //                 audioTracks.forEach((track:any) => {track.stop()});
-    //             }
-    //         }
+    React.useEffect(
+        () => {
+            if(isCaptureEnable) {
+                console.log("audio enable");
+                navigator.mediaDevices.getUserMedia(
+                    {audio: true}
+                    )
+                    .then(handleAudioSuccess)
+                    .catch(handleAudioError);
+            }else {
+                if(audioTracks) {
+                    audioTracks.forEach((track:any) => {track.stop()});
+                }
+            }
             
-    //     },
-    //     [audioState.current]
-    // )
+        },
+        [isCaptureEnable]
+    )
 
     React.useEffect(
         () => {
@@ -80,9 +88,7 @@ export const Top = () => {
 
 
 
-    const [isCaptureEnable, setCaptureEnable] = useState<boolean>(false);
-    const webcamRef = useRef<Webcam>(null);
-    const defaultRaderData = 0.5;
+    
 
 
     //face-api model
@@ -103,9 +109,10 @@ export const Top = () => {
             faceapi.nets.faceExpressionNet.loadFromUri('/models'),
           ]).then(() => {
             faceDetection();
-            // audioDetection();
+            audioDetection();
           })
     }
+
 
     const faceDetection = () => {
         setInterval(async () => {
@@ -144,16 +151,50 @@ export const Top = () => {
         },1000);
     };
 
-    // const audioDetection = () => {
-    //     setInterval(async () => {
-    //         if(!audioState.current) {
-    //             const bufferLength = analyserNode.current?.frequencyBinCount;
-    //             const dataArray = new Uint8Array(bufferLength || 0);
-    //             analyserNode.current?.getByteTimeDomainData(dataArray);
-    //             setAudioData(dataArray);
-    //         }
-    //     },100)
-    // };
+    const audioDetection = () => {
+        setInterval(async () => {
+            if(isCaptureEnableRef.current) {
+                const bufferLength = analyserNode.current?.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength || 0);
+                analyserNode.current?.getByteTimeDomainData(dataArray);
+                setAudioData(dataArray);
+                renderAudioFrame(dataArray);
+            }
+        },200)
+    };
+
+    const renderAudioFrame = (data: Uint8Array) => {
+        const ctx = canvasRef.current!.getContext('2d')!;
+        const WIDTH = ctx.canvas.width;
+        const HEIGHT = ctx.canvas.height;
+        const dataLength = data.length;
+        const barWidth = WIDTH / dataLength;
+        ctx.fillStyle = '#1e1e1e';
+        ctx.fillRect(0, 0, WIDTH, HEIGHT);
+        var x:number = 0;
+        for (let i = 0; i < dataLength; i++) {
+            const barHeight = data[i]-128;
+
+            const r = barHeight + 25 * (i / dataLength);
+            const g = 250 * (i / dataLength);
+            const b = 50;
+
+            ctx.fillStyle = 'rgb(' + r + ',' + g + ',' + b + ')'
+            ctx.fillRect(x, HEIGHT / 2, barWidth, -barHeight*2);
+            ctx.fillRect(x, HEIGHT / 2, barWidth, barHeight*2);
+
+            x += barWidth + 1;
+        }
+        animeIdRef.current = requestAnimationFrame(() => renderAudioFrame(data));
+    };
+
+    useEffect(() => {
+		return () => {
+			if (animeIdRef.current) {
+				cancelAnimationFrame(animeIdRef.current)
+			}
+		}
+	}, []);
 
     React.useEffect(() => {
         loadModels();
@@ -221,9 +262,7 @@ export const Top = () => {
         <header>
             <h1>meeting app</h1>
         </header>
-        {/* <Button variant="contained" color="primary" onClick={() => {audioState.current = !audioState.current}}>
-            {audioState.current ? "マイクON" : "マイクOFF"}
-        </Button> */}
+        
         {isCaptureEnable || (
                 <Button variant="contained" color="primary" onClick={() => setCaptureEnable(true)}>開始</Button>
         )}
@@ -277,7 +316,7 @@ export const Top = () => {
                         </LineChart>
                     </ResponsiveContainer>
                 </div> */}
-                <div style={{height:"400px",width:"500px"}}>
+                <div style={{height:"300px",width:"500px"}}>
                     <ResponsiveContainer width="100%" height="100%">
                         <RadarChart cx="50%" cy="50%" outerRadius="80%" data={chartData}>
                             <PolarGrid />
@@ -287,13 +326,8 @@ export const Top = () => {
                         </RadarChart>
                     </ResponsiveContainer>
                 </div>
-                <div style={{height:"400px",width:"500px"}}>
-                {/* <Surface width={300} height={300}>
-                    <Node
-                        shader={{ frag: GLSL`${glsl}` }}
-                        uniforms={{ data: audioData }}
-                        ></Node>
-                </Surface> */}
+                <div style={{height:"250px",width:"500px"}}>
+                    <canvas ref={canvasRef} style={{height:"100%",width:"100%"}} />
                 </div>
                 </div>
                 </>

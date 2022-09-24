@@ -7,7 +7,7 @@ services:
       - NODE_ENV=development
     volumes:
       - ./:/usr/src/app
-    command: sh -c 'cd frontend && yarn start'
+    command: sh -c 'cd frontend && HTTPS=true yarn start'
     ports:
       - '3000:3000'
     tty: true
