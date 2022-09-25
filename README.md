@@ -2,7 +2,7 @@
 ## 環境
 Docker v4.9.1
 
-##開始
+## 開始
 ```bash
 docker-compose build
 docker-compose up (-d)
