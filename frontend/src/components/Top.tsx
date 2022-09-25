@@ -2,7 +2,7 @@ import React from 'react';
 import { useRef, useState, useEffect, useCallback} from "react";
 import Webcam from "react-webcam";
 import * as faceapi from 'face-api.js';
-import Button from '@material-ui/core/Button';
+import {Button, FormControl, InputLabel, Select, MenuItem} from '@material-ui/core';
 import {ResponsiveContainer,Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
 
 
@@ -13,8 +13,12 @@ import { styled } from '@material-ui/core';
 
 export const Top = () => {
     //show all cameras by deviceid
-    const [deviceId, setDeviceId] = React.useState<string>("");
-    const [devices, setDevices] = React.useState<MediaDeviceInfo[]>([]);
+    const [cameraDeviceId, setCameraDeviceId] = React.useState<string>("");
+    const [defaultCameraDeviceId, setDefaultCameraDeviceId] = React.useState<string>("");
+    const [cameraDevices, setCameraDevices] = React.useState<MediaDeviceInfo[]>([]);
+    const [audioDeviceId, setAudioDeviceId] = React.useState<string>("");
+    const [defaultAudioDeviceId, setDefaultAudioDeviceId] = React.useState<string>("");
+    const [audioDevices, setAudioDevices] = React.useState<MediaDeviceInfo[]>([]);
     const [audioTracks, setAudioTracks] = React.useState<MediaStreamTrack[]>([]);
     const audioContext = React.useRef<AudioContext>();
     const sourceNode = React.useRef<MediaStreamAudioSourceNode>();
@@ -24,6 +28,17 @@ export const Top = () => {
     const animeIdRef = useRef<number>();
     const [isCaptureEnable, setCaptureEnable] = useState<boolean>(false);
     const isCaptureEnableRef = React.useRef<boolean>(isCaptureEnable);
+    const [timer, setTimer] = React.useState<number>(0);
+    const [expressions, setExpressions] = React.useState({
+        angry: 0,
+        disgusted: 0,
+        fearful: 0,
+        happy: 0,
+        neutral: 0,
+        sad: 0,
+        surprised: 0
+    });
+
     useEffect(() => {
         isCaptureEnableRef.current = isCaptureEnable;
       }, [isCaptureEnable]);
@@ -32,13 +47,22 @@ export const Top = () => {
     const videoConstraints = {
         width: 720,
         height: 400,
-        deviceId: deviceId,
+        deviceId: cameraDeviceId,
         facingMode: "user"
 
     };
 
+    const audioConstraints = {
+        audio: {
+            deviceId: audioDeviceId
+        }
+    }
+
     const handleDevices = (mediaDevices:MediaDeviceInfo[]) => {
-        setDevices(mediaDevices.filter((item) => item.kind === "videoinput"));
+        setCameraDevices(mediaDevices.filter((item) => item.kind === "videoinput"));
+        if(cameraDevices && defaultCameraDeviceId === "")setDefaultCameraDeviceId(cameraDevices[0].deviceId);
+        setAudioDevices(mediaDevices.filter((item) => item.kind === "audioinput"));
+        if(audioDevices && defaultAudioDeviceId === "")setDefaultAudioDeviceId(audioDevices[0].deviceId);
     };
 
     const handleAudioSuccess = (stream:any) => {
@@ -58,29 +82,25 @@ export const Top = () => {
     
     React.useEffect(
         () => {
+            audioTracks.forEach((track:any) => {track.stop()});
             if(isCaptureEnable) {
                 console.log("audio enable");
+                
                 navigator.mediaDevices.getUserMedia(
-                    {audio: true}
+                    audioConstraints
                     )
                     .then(handleAudioSuccess)
                     .catch(handleAudioError);
-            }else {
-                if(audioTracks) {
-                    audioTracks.forEach((track:any) => {track.stop()});
-                }
             }
-            
         },
-        [isCaptureEnable]
+        [isCaptureEnable,audioDeviceId]
     )
 
     React.useEffect(
         () => {
             navigator.mediaDevices.enumerateDevices().then(handleDevices);
-            
         },
-        [handleDevices]
+        [timer]
     );
 
 
@@ -92,15 +112,7 @@ export const Top = () => {
 
 
     //face-api model
-    const [expressions, setExpressions] = React.useState({
-        angry: 0,
-        disgusted: 0,
-        fearful: 0,
-        happy: 0,
-        neutral: 0,
-        sad: 0,
-        surprised: 0
-    });
+    
     const loadModels = async () => {
         Promise.all([
             faceapi.nets.tinyFaceDetector.loadFromUri('/models'),
@@ -116,6 +128,8 @@ export const Top = () => {
 
     const faceDetection = () => {
         setInterval(async () => {
+            const nowTime = new Date();
+            setTimer(nowTime.getSeconds());
             if(webcamRef.current) {
                 const webcamCurrent = webcamRef.current as any;
                 if(webcamCurrent.video.readyState === 4) {
@@ -148,7 +162,7 @@ export const Top = () => {
             }
             
 
-        },1000);
+        },500);
     };
 
     const audioDetection = () => {
@@ -264,16 +278,18 @@ export const Top = () => {
         </header>
         
         {isCaptureEnable || (
-                <Button variant="contained" color="primary" onClick={() => setCaptureEnable(true)}>開始</Button>
+                <Button variant="contained" color="primary" disabled={defaultCameraDeviceId === "" || defaultAudioDeviceId === ""} onClick={() => setCaptureEnable(true)}>
+                    {(defaultCameraDeviceId === "" || defaultAudioDeviceId === "") ? "デバイス取得中...お待ちください" : "ミーティングを開始する"}
+                </Button>
         )}
         <div className="wrapper">
             
             {isCaptureEnable && (
                 <>
-                <div className="element">
-                <div>
+                <div style={{alignItems: 'center'}}>
                     <Button variant="contained" color="primary" onClick={() => setCaptureEnable(false)}>終了</Button>
                 </div>
+                <div className="element">
                 <div>
                     <Webcam
                     audio={false}
@@ -283,16 +299,46 @@ export const Top = () => {
                     videoConstraints={videoConstraints}
                     />
                 </div>
-                <div>
-                    {devices.map((device, key) => (
-                    <Button variant="contained" color="secondary"
-                        key={device.deviceId}
-                        onClick={() => setDeviceId(device.deviceId)}
-                    >
-                        {device.label || `Device ${key + 1}`}
-                    </Button>
-                    ))}
+                <div className="wrapper" >
+                    <div className="element" style={{width: "200px"}}>
+                    <FormControl fullWidth>
+                        <InputLabel>カメラ</InputLabel>
+                        <Select 
+                            label="カメラ"
+                            onChange={(event) => {setCameraDeviceId(event.target.value as string);setDefaultCameraDeviceId(event.target.value as string)}}
+                            defaultValue={defaultCameraDeviceId}
+                            >
+                            {cameraDevices.map((device, key) => (
+                            <MenuItem  
+                                value={device.deviceId}
+                            >
+                                {device.label || `Device ${key + 1}`}
+                            </MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
+                    </div>
+                    <div className="element" style={{width:"20px"}}></div>
+                    <div className="element" style={{width: "200px"}}>
+                    <FormControl fullWidth>
+                        <InputLabel>マイク</InputLabel>
+                        <Select 
+                            label="マイク"
+                            onChange={(event) => {setAudioDeviceId(event.target.value as string);setDefaultAudioDeviceId(event.target.value as string)}}
+                            defaultValue={defaultAudioDeviceId}
+                            >
+                            {audioDevices.map((device, key) => (
+                            <MenuItem  
+                                value={device.deviceId}
+                            >
+                                {device.label || `Device ${key + 1}`}
+                            </MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
+                    </div>
                 </div>
+                
                 </div>
                 <div className="element">
                 {/* <div style={{height:"200px",width:"400px"}}>
