@@ -4,6 +4,7 @@ import Webcam from "react-webcam";
 import * as faceapi from 'face-api.js';
 import {Button, FormControl, InputLabel, Select, MenuItem} from '@material-ui/core';
 import {ResponsiveContainer,Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
+import { WebSocketConnection } from './WebSocketConnection';
 
 
 import "../css/Top.css" 
@@ -14,21 +15,23 @@ import { styled } from '@material-ui/core';
 export const Top = () => {
     //show all cameras by deviceid
     const [cameraDeviceId, setCameraDeviceId] = React.useState<string>("");
-    const [defaultCameraDeviceId, setDefaultCameraDeviceId] = React.useState<string>("");
+    const [bothDeviceFound, setBothDeviceFound] = React.useState<boolean>(false);
+    const [defaultCameraIndex, setDefaultCameraIndex] = React.useState<number>(0);
     const [cameraDevices, setCameraDevices] = React.useState<MediaDeviceInfo[]>([]);
     const [audioDeviceId, setAudioDeviceId] = React.useState<string>("");
-    const [defaultAudioDeviceId, setDefaultAudioDeviceId] = React.useState<string>("");
+    const [defaultAudioIndex, setDefaultAudioIndex] = React.useState<number>(0);
     const [audioDevices, setAudioDevices] = React.useState<MediaDeviceInfo[]>([]);
     const [audioTracks, setAudioTracks] = React.useState<MediaStreamTrack[]>([]);
     const audioContext = React.useRef<AudioContext>();
     const sourceNode = React.useRef<MediaStreamAudioSourceNode>();
     const analyserNode = React.useRef<AnalyserNode>();
     const [audioData, setAudioData] = React.useState<Uint8Array>();
-    const canvasRef = useRef<HTMLCanvasElement>(null)
-    const animeIdRef = useRef<number>();
-    const [isCaptureEnable, setCaptureEnable] = useState<boolean>(false);
+    const canvasRef = React.useRef<HTMLCanvasElement>(null)
+    const animeIdRef = React.useRef<number>();
+    const [isCaptureEnable, setCaptureEnable] = React.useState<boolean>(false);
     const isCaptureEnableRef = React.useRef<boolean>(isCaptureEnable);
     const [timer, setTimer] = React.useState<number>(0);
+    const [faceEvaluation, setFaceEvaluation] = React.useState<number>(0);
     const [expressions, setExpressions] = React.useState({
         angry: 0,
         disgusted: 0,
@@ -60,9 +63,8 @@ export const Top = () => {
 
     const handleDevices = (mediaDevices:MediaDeviceInfo[]) => {
         setCameraDevices(mediaDevices.filter((item) => item.kind === "videoinput"));
-        if(cameraDevices && defaultCameraDeviceId === "")setDefaultCameraDeviceId(cameraDevices[0].deviceId);
         setAudioDevices(mediaDevices.filter((item) => item.kind === "audioinput"));
-        if(audioDevices && defaultAudioDeviceId === "")setDefaultAudioDeviceId(audioDevices[0].deviceId);
+        if(cameraDevices.length > 0 && audioDevices.length > 0)setBothDeviceFound(true);
     };
 
     const handleAudioSuccess = (stream:any) => {
@@ -152,10 +154,13 @@ export const Top = () => {
                             exp.sad ,
                             exp.surprised
                         ];
+                        var faceEval:number = 0;
                         for(var i:number = 0;i < 7;++i ) {
                             nextChartData[i].data = data[i];
+                            if(i !== 4) faceEval += data[i];
                             nextChartData[i].raderData = data[i] + defaultRaderData;
                         }
+                        setFaceEvaluation(faceEval);
                         setChartData(nextChartData);
                     }
                 }
@@ -278,8 +283,8 @@ export const Top = () => {
         </header>
         
         {isCaptureEnable || (
-                <Button variant="contained" color="primary" disabled={defaultCameraDeviceId === "" || defaultAudioDeviceId === ""} onClick={() => setCaptureEnable(true)}>
-                    {(defaultCameraDeviceId === "" || defaultAudioDeviceId === "") ? "デバイス取得中...お待ちください" : "ミーティングを開始する"}
+                <Button variant="contained" color="primary" disabled={!bothDeviceFound} onClick={() => setCaptureEnable(true)}>
+                    {bothDeviceFound ? "ミーティングを開始する": "デバイス取得中...お待ちください"}
                 </Button>
         )}
         <div className="wrapper">
@@ -305,12 +310,12 @@ export const Top = () => {
                         <InputLabel>カメラ</InputLabel>
                         <Select 
                             label="カメラ"
-                            onChange={(event) => {setCameraDeviceId(event.target.value as string);setDefaultCameraDeviceId(event.target.value as string)}}
-                            defaultValue={defaultCameraDeviceId}
+                            onChange={(event) => {setCameraDeviceId(cameraDevices[event.target.value as number].deviceId);setDefaultCameraIndex(event.target.value as number);}}
+                            defaultValue={defaultCameraIndex}
                             >
                             {cameraDevices.map((device, key) => (
                             <MenuItem  
-                                value={device.deviceId}
+                                value={key}
                             >
                                 {device.label || `Device ${key + 1}`}
                             </MenuItem>
@@ -324,12 +329,12 @@ export const Top = () => {
                         <InputLabel>マイク</InputLabel>
                         <Select 
                             label="マイク"
-                            onChange={(event) => {setAudioDeviceId(event.target.value as string);setDefaultAudioDeviceId(event.target.value as string)}}
-                            defaultValue={defaultAudioDeviceId}
+                            onChange={(event) => {setAudioDeviceId(audioDevices[event.target.value as number].deviceId);setDefaultAudioIndex(event.target.value as number);}}
+                            defaultValue={defaultAudioIndex}
                             >
                             {audioDevices.map((device, key) => (
                             <MenuItem  
-                                value={device.deviceId}
+                                value={key}
                             >
                                 {device.label || `Device ${key + 1}`}
                             </MenuItem>
@@ -341,27 +346,9 @@ export const Top = () => {
                 
                 </div>
                 <div className="element">
-                {/* <div style={{height:"200px",width:"400px"}}>
-                    <ResponsiveContainer width="100%" height="100%">
-                        <LineChart
-                        width={500}
-                        height={300}
-                        data={chartData}
-                        margin={{
-                            top: 5,
-                            right: 30,
-                            left: 20,
-                            bottom: 5,
-                        }}
-                        >
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="expression" />
-                        <YAxis />
-                        <Tooltip />
-                        <Line type="monotone" dataKey="data" stroke="#8884d8" activeDot={{ r: 8 }} />
-                        </LineChart>
-                    </ResponsiveContainer>
-                </div> */}
+                    <div style={{width:"100px"}}></div>
+                </div>
+                <div className="element">
                 <div style={{height:"300px",width:"500px"}}>
                     <ResponsiveContainer width="100%" height="100%">
                         <RadarChart cx="50%" cy="50%" outerRadius="80%" data={chartData}>
@@ -372,7 +359,7 @@ export const Top = () => {
                         </RadarChart>
                     </ResponsiveContainer>
                 </div>
-                <div style={{height:"250px",width:"500px"}}>
+                <div style={{height:"200px",width:"500px"}}>
                     <canvas ref={canvasRef} style={{height:"100%",width:"100%"}} />
                 </div>
                 </div>
