@@ -4,7 +4,9 @@ import Webcam from "react-webcam";
 import * as faceapi from 'face-api.js';
 import {Button, FormControl, InputLabel, Select, MenuItem} from '@material-ui/core';
 import {ResponsiveContainer,Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
+import {Blocks} from 'react-loader-spinner';
 import { WebSocketConnection } from './WebSocketConnection';
+
 
 
 import "../css/Top.css" 
@@ -22,6 +24,7 @@ export const Top = () => {
     const [defaultAudioIndex, setDefaultAudioIndex] = React.useState<number>(0);
     const [audioDevices, setAudioDevices] = React.useState<MediaDeviceInfo[]>([]);
     const [audioTracks, setAudioTracks] = React.useState<MediaStreamTrack[]>([]);
+    const [modelsLoaded, setModelsLoaded] = React.useState<boolean>(false);
     const audioContext = React.useRef<AudioContext>();
     const sourceNode = React.useRef<MediaStreamAudioSourceNode>();
     const analyserNode = React.useRef<AnalyserNode>();
@@ -32,6 +35,7 @@ export const Top = () => {
     const isCaptureEnableRef = React.useRef<boolean>(isCaptureEnable);
     const [timer, setTimer] = React.useState<number>(0);
     const [faceEvaluation, setFaceEvaluation] = React.useState<number>(0);
+    const defaultRaderData = 0.5;
     const [expressions, setExpressions] = React.useState({
         angry: 0,
         disgusted: 0,
@@ -41,12 +45,66 @@ export const Top = () => {
         sad: 0,
         surprised: 0
     });
+    const defaultChartData = [
+        {
+            expression: 'angry',
+            data:0,
+            raderData:defaultRaderData,
+            fullMark: 1,
+            index: 0
+        },
+        {
+            expression: 'disgusted',
+            data:0,
+            raderData:defaultRaderData,
+            fullMark: 1,
+            index: 1
+        },
+        {
+            expression: 'fearful',
+            data:0,
+            raderData:defaultRaderData,
+            fullMark: 1,
+            index: 2
+        },
+        {
+            expression: 'happy',
+            raderData:defaultRaderData,
+            data:0,
+            fullMark: 1,
+            index: 3
+        },
+        {
+            expression: 'neutral',
+            raderData:defaultRaderData,
+            data:1,
+            fullMark: 1,
+            index: 4
+        },
+        {
+            expression: 'sad',
+            raderData:defaultRaderData,
+            data:0,
+            fullMark: 1,
+            index: 5
+        },
+        {
+            expression: 'surprised',
+            raderData:defaultRaderData,
+            data:0,
+            fullMark: 1,
+            index: 6
+        },
+      ];
+    const [chartData, setChartData] = React.useState(defaultChartData);
+    
 
     useEffect(() => {
         isCaptureEnableRef.current = isCaptureEnable;
       }, [isCaptureEnable]);
-    const webcamRef = useRef<Webcam>(null);
-    const defaultRaderData = 0.5;
+    const webcamRef = React.useRef<Webcam>(null);
+    const [webcamReady, setWebcamReady] = React.useState<boolean>(false);
+    
     const videoConstraints = {
         width: 720,
         height: 400,
@@ -121,7 +179,18 @@ export const Top = () => {
             faceapi.nets.faceLandmark68Net.loadFromUri('/models'),
             faceapi.nets.faceRecognitionNet.loadFromUri('/models'),
             faceapi.nets.faceExpressionNet.loadFromUri('/models'),
-          ]).then(() => {
+          ]).then(async () => {
+            try {
+                const testData = await faceapi.fetchImage('/models/test.png')
+                await faceapi.detectAllFaces(testData,new faceapi.TinyFaceDetectorOptions())
+                    .withFaceLandmarks()
+                    .withFaceExpressions();
+            }catch (e){
+                console.log("error done");
+            }
+    
+            
+            setModelsLoaded(true);
             faceDetection();
             audioDetection();
           })
@@ -140,6 +209,7 @@ export const Top = () => {
                         (video,new faceapi.TinyFaceDetectorOptions())
                         .withFaceLandmarks()
                         .withFaceExpressions();
+                    
                     if(detections.length > 0) {
                         const exp = detections[0].expressions;
                         console.log(exp);
@@ -162,7 +232,11 @@ export const Top = () => {
                         }
                         setFaceEvaluation(faceEval);
                         setChartData(nextChartData);
+                        
                     }
+                    setWebcamReady(true);
+                }else{
+                    setWebcamReady(false);
                 }
             }
             
@@ -222,58 +296,7 @@ export const Top = () => {
     //chart settings
 
     const labels:string[] = ["angry" ,"disgusted", "fearful", "happy", "neutral", "sad", "surprised"];
-    const defaultChartData = [
-        {
-            expression: 'angry',
-            data:0,
-            raderData:defaultRaderData,
-            fullMark: 1,
-            index: 0
-        },
-        {
-            expression: 'disgusted',
-            data:0,
-            raderData:defaultRaderData,
-            fullMark: 1,
-            index: 1
-        },
-        {
-            expression: 'fearful',
-            data:0,
-            raderData:defaultRaderData,
-            fullMark: 1,
-            index: 2
-        },
-        {
-            expression: 'happy',
-            raderData:defaultRaderData,
-            data:0,
-            fullMark: 1,
-            index: 3
-        },
-        {
-            expression: 'neutral',
-            raderData:defaultRaderData,
-            data:1,
-            fullMark: 1,
-            index: 4
-        },
-        {
-            expression: 'sad',
-            raderData:defaultRaderData,
-            data:0,
-            fullMark: 1,
-            index: 5
-        },
-        {
-            expression: 'surprised',
-            raderData:defaultRaderData,
-            data:0,
-            fullMark: 1,
-            index: 6
-        },
-      ];
-    const [chartData, setChartData] = React.useState(defaultChartData);
+    
 
 
     return (
@@ -282,20 +305,42 @@ export const Top = () => {
             <h1>meeting app</h1>
         </header>
         
-        {isCaptureEnable || (
-                <Button variant="contained" color="primary" disabled={!bothDeviceFound} onClick={() => setCaptureEnable(true)}>
-                    {bothDeviceFound ? "ミーティングを開始する": "デバイス取得中...お待ちください"}
+        {isCaptureEnable ?
+        (
+            <Button variant="contained" color="secondary" onClick={() => setCaptureEnable(false)}>終了</Button>
+
+        ) : (
+
+                <Button variant="contained" color="primary" disabled={!bothDeviceFound || !modelsLoaded} onClick={() => setCaptureEnable(true)}>
+                    
+                    {(bothDeviceFound && modelsLoaded) ? "ミーティングを開始する": 
+                    (
+                        <>
+                        <Blocks
+                        visible={true}
+                        height="28"
+                        width="28"
+                        ariaLabel="blocks-loading"
+                        wrapperStyle={{}}
+                        wrapperClass="blocks-wrapper"
+                        />
+                        <div style={{width:"10px"}}></div>
+                        <div>
+                            {
+                                (bothDeviceFound ? "モデルをロード中..." : "デバイスを取得中...")
+                            }
+                        </div>
+                        </>
+                    )}
                 </Button>
         )}
-        <div className="wrapper">
-            
+        
+        <div style={{height: "20px"}}></div>
+        <div className="wrapper">     
             {isCaptureEnable && (
                 <>
-                <div style={{alignItems: 'center'}}>
-                    <Button variant="contained" color="primary" onClick={() => setCaptureEnable(false)}>終了</Button>
-                </div>
                 <div className="element">
-                <div>
+                <div style={{position: "relative"}}>
                     <Webcam
                     audio={false}
                     width={540}
@@ -303,6 +348,21 @@ export const Top = () => {
                     ref={webcamRef}
                     videoConstraints={videoConstraints}
                     />
+                    {
+                        webcamReady || (
+                            <div className="cameraloading">
+                            <Blocks
+                            visible={true}
+                            height="80"
+                            width="80"
+                            ariaLabel="blocks-loading"
+                            wrapperStyle={{}}
+                            wrapperClass="blocks-wrapper"
+                            />
+                            </div>
+                        )
+                    }
+                    
                 </div>
                 <div className="wrapper" >
                     <div className="element" style={{width: "200px"}}>
