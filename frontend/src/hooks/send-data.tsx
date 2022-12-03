@@ -10,7 +10,7 @@ export const useSendData = () => {
     React.useEffect(() => {
         console.log(dataToSend);
         if(dataToSend.length === 0)return;
-        socket.send(dataToSend);
+        if(socket.readyState === socket.OPEN)socket.send(dataToSend);
         setDataToSend("");
     },[dataToSend]);
 

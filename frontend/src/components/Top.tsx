@@ -165,7 +165,6 @@ export const Top = () => {
         () => {
             navigator.mediaDevices.enumerateDevices().then(handleDevices);
             if(socket.readyState === socket.CLOSED) {
-                setCaptureEnable(false);
                 reconnectSocket(connectWebsocket());
             }
         },
