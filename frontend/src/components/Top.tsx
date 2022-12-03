@@ -165,6 +165,7 @@ export const Top = () => {
         () => {
             navigator.mediaDevices.enumerateDevices().then(handleDevices);
             if(socket.readyState === socket.CLOSED) {
+                setCaptureEnable(false);
                 reconnectSocket(connectWebsocket());
             }
         },
@@ -319,13 +320,13 @@ export const Top = () => {
         
         {isCaptureEnable ?
         (
-            <Button variant="contained" color="secondary" onClick={() => setCaptureEnable(false)}>終了</Button>
+            <Button variant="contained" color="secondary" onClick={() => setCaptureEnable(false)}>End</Button>
 
         ) : (
 
                 <Button variant="contained" color="primary" disabled={!bothDeviceFound || !modelsLoaded} onClick={() => setCaptureEnable(true)}>
                     
-                    {(bothDeviceFound && modelsLoaded) ? "ミーティングを開始する": 
+                    {(bothDeviceFound && modelsLoaded) ? "Start meeting": 
                     (
                         <>
                         <Blocks
@@ -339,7 +340,7 @@ export const Top = () => {
                         <div style={{width:"10px"}}></div>
                         <div>
                             {
-                                (bothDeviceFound ? "モデルをロード中..." : "デバイスを取得中...")
+                                (bothDeviceFound ? "loading ML models..." : "Searching devices...")
                             }
                         </div>
                         </>
@@ -379,9 +380,9 @@ export const Top = () => {
                 <div className="wrapper" >
                     <div className="element" style={{width: "200px"}}>
                     <FormControl fullWidth>
-                        <InputLabel>カメラ</InputLabel>
+                        <InputLabel>Camera</InputLabel>
                         <Select 
-                            label="カメラ"
+                            label="Camera"
                             onChange={(event) => {setCameraDeviceId(cameraDevices[event.target.value as number].deviceId);setDefaultCameraIndex(event.target.value as number);}}
                             defaultValue={defaultCameraIndex}
                             >
@@ -398,9 +399,9 @@ export const Top = () => {
                     <div className="element" style={{width:"20px"}}></div>
                     <div className="element" style={{width: "200px"}}>
                     <FormControl fullWidth>
-                        <InputLabel>マイク</InputLabel>
+                        <InputLabel>Microphone</InputLabel>
                         <Select 
-                            label="マイク"
+                            label="Microphone"
                             onChange={(event) => {setAudioDeviceId(audioDevices[event.target.value as number].deviceId);setDefaultAudioIndex(event.target.value as number);}}
                             defaultValue={defaultAudioIndex}
                             >
@@ -427,7 +428,7 @@ export const Top = () => {
                             <PolarGrid />
                             <PolarAngleAxis dataKey="expression" domain={[0,1.5]}/>
                             <PolarRadiusAxis />
-                            <Radar name="感情" dataKey="raderData" stroke="#2b2b2b" fill="#8884d8" fillOpacity={0.6} />
+                            <Radar name="Emotion" dataKey="raderData" stroke="#2b2b2b" fill="#8884d8" fillOpacity={0.6} />
                         </RadarChart>
                     </ResponsiveContainer>
                 </div>
