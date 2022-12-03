@@ -3,9 +3,14 @@ import { useRef, useState, useEffect, useCallback} from "react";
 import Webcam from "react-webcam";
 import * as faceapi from 'face-api.js';
 import {Button, FormControl, InputLabel, Select, MenuItem} from '@material-ui/core';
+import CloudIcon from '@material-ui/icons/Cloud';
+import CloudOffIcon from '@material-ui/icons/CloudOff';
 import {ResponsiveContainer,Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
 import {Blocks} from 'react-loader-spinner';
+import {useRecoilValue, useRecoilState} from 'recoil';
 import { WebSocketConnection } from './WebSocketConnection';
+import {useSendData} from "../hooks/send-data";
+import {connectWebsocketSelector, websocketAtom, connectWebsocket} from "../state/websocket";
 
 
 
@@ -97,6 +102,8 @@ export const Top = () => {
         },
       ];
     const [chartData, setChartData] = React.useState(defaultChartData);
+    const {dataToSend, setDataToSend} = useSendData();
+    const [socket,reconnectSocket] = useRecoilState(connectWebsocketSelector);
     
 
     useEffect(() => {
@@ -144,8 +151,6 @@ export const Top = () => {
         () => {
             audioTracks.forEach((track:any) => {track.stop()});
             if(isCaptureEnable) {
-                console.log("audio enable");
-                
                 navigator.mediaDevices.getUserMedia(
                     audioConstraints
                     )
@@ -159,16 +164,12 @@ export const Top = () => {
     React.useEffect(
         () => {
             navigator.mediaDevices.enumerateDevices().then(handleDevices);
+            if(socket.readyState === socket.CLOSED) {
+                reconnectSocket(connectWebsocket());
+            }
         },
         [timer]
     );
-
-
-
-
-
-
-    
 
 
     //face-api model
@@ -212,7 +213,6 @@ export const Top = () => {
                     
                     if(detections.length > 0) {
                         const exp = detections[0].expressions;
-                        console.log(exp);
                         setExpressions(exp);
                         const nextChartData = defaultChartData;
                         const data = [
@@ -232,6 +232,8 @@ export const Top = () => {
                         }
                         setFaceEvaluation(faceEval);
                         setChartData(nextChartData);
+                        setDataToSend(JSON.stringify(exp));
+
                         
                     }
                     setWebcamReady(true);
@@ -265,8 +267,10 @@ export const Top = () => {
         ctx.fillStyle = '#1e1e1e';
         ctx.fillRect(0, 0, WIDTH, HEIGHT);
         var x:number = 0;
+        var soundStats:number = 0;
         for (let i = 0; i < dataLength; i++) {
             const barHeight = data[i]-128;
+            soundStats += barHeight;
 
             const r = barHeight + 25 * (i / dataLength);
             const g = 250 * (i / dataLength);
@@ -278,6 +282,7 @@ export const Top = () => {
 
             x += barWidth + 1;
         }
+        //console.log(soundStats);
         animeIdRef.current = requestAnimationFrame(() => renderAudioFrame(data));
     };
 
@@ -301,8 +306,15 @@ export const Top = () => {
 
     return (
         <>
+
         <header>
             <h1>meeting app</h1>
+            {socket.readyState === socket.OPEN ? 
+            (
+                <CloudIcon fontSize="large"/>
+            ) : (
+                <CloudOffIcon fontSize="large"/>
+            )}
         </header>
         
         {isCaptureEnable ?
@@ -426,6 +438,8 @@ export const Top = () => {
                 </>
             )}
             </div>
+
+
         </>
     );
 }

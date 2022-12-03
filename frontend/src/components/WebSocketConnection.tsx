@@ -1,9 +1,9 @@
 import React, { useEffect } from 'react';
+import {useSendData} from "../hooks/send-data";
 
 
 
 export const WebSocketConnection = () => {
-    const socketRef = React.useRef();
 
 
     useEffect(() => {
