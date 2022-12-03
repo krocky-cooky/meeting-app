@@ -3,8 +3,15 @@ import { useRef, useState, useEffect, useCallback} from "react";
 import Webcam from "react-webcam";
 import * as faceapi from 'face-api.js';
 import {Button, FormControl, InputLabel, Select, MenuItem} from '@material-ui/core';
+import CloudIcon from '@material-ui/icons/Cloud';
+import CloudOffIcon from '@material-ui/icons/CloudOff';
 import {ResponsiveContainer,Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
+import {Blocks} from 'react-loader-spinner';
+import {useRecoilValue, useRecoilState} from 'recoil';
 import { WebSocketConnection } from './WebSocketConnection';
+import {useSendData} from "../hooks/send-data";
+import {connectWebsocketSelector, websocketAtom, connectWebsocket} from "../state/websocket";
+
 
 
 import "../css/Top.css" 
@@ -22,6 +29,7 @@ export const Top = () => {
     const [defaultAudioIndex, setDefaultAudioIndex] = React.useState<number>(0);
     const [audioDevices, setAudioDevices] = React.useState<MediaDeviceInfo[]>([]);
     const [audioTracks, setAudioTracks] = React.useState<MediaStreamTrack[]>([]);
+    const [modelsLoaded, setModelsLoaded] = React.useState<boolean>(false);
     const audioContext = React.useRef<AudioContext>();
     const sourceNode = React.useRef<MediaStreamAudioSourceNode>();
     const analyserNode = React.useRef<AnalyserNode>();
@@ -32,6 +40,7 @@ export const Top = () => {
     const isCaptureEnableRef = React.useRef<boolean>(isCaptureEnable);
     const [timer, setTimer] = React.useState<number>(0);
     const [faceEvaluation, setFaceEvaluation] = React.useState<number>(0);
+    const defaultRaderData = 0.5;
     const [expressions, setExpressions] = React.useState({
         angry: 0,
         disgusted: 0,
@@ -41,187 +50,6 @@ export const Top = () => {
         sad: 0,
         surprised: 0
     });
-
-    useEffect(() => {
-        isCaptureEnableRef.current = isCaptureEnable;
-      }, [isCaptureEnable]);
-    const webcamRef = useRef<Webcam>(null);
-    const defaultRaderData = 0.5;
-    const videoConstraints = {
-        width: 720,
-        height: 400,
-        deviceId: cameraDeviceId,
-        facingMode: "user"
-
-    };
-
-    const audioConstraints = {
-        audio: {
-            deviceId: audioDeviceId
-        }
-    }
-
-    const handleDevices = (mediaDevices:MediaDeviceInfo[]) => {
-        setCameraDevices(mediaDevices.filter((item) => item.kind === "videoinput"));
-        setAudioDevices(mediaDevices.filter((item) => item.kind === "audioinput"));
-        if(cameraDevices.length > 0 && audioDevices.length > 0)setBothDeviceFound(true);
-    };
-
-    const handleAudioSuccess = (stream:any) => {
-        setAudioTracks(stream.getAudioTracks());
-        audioContext.current = new AudioContext();
-        sourceNode.current = audioContext.current.createMediaStreamSource(stream);
-        analyserNode.current = audioContext.current.createAnalyser();
-        audioContext.current.resume();
-        analyserNode.current.fftSize = 128;
-        sourceNode.current.connect(analyserNode.current);
-    };
-
-    const handleAudioError = () => {
-
-    };
-
-    
-    React.useEffect(
-        () => {
-            audioTracks.forEach((track:any) => {track.stop()});
-            if(isCaptureEnable) {
-                console.log("audio enable");
-                
-                navigator.mediaDevices.getUserMedia(
-                    audioConstraints
-                    )
-                    .then(handleAudioSuccess)
-                    .catch(handleAudioError);
-            }
-        },
-        [isCaptureEnable,audioDeviceId]
-    )
-
-    React.useEffect(
-        () => {
-            navigator.mediaDevices.enumerateDevices().then(handleDevices);
-        },
-        [timer]
-    );
-
-
-
-
-
-
-    
-
-
-    //face-api model
-    
-    const loadModels = async () => {
-        Promise.all([
-            faceapi.nets.tinyFaceDetector.loadFromUri('/models'),
-            faceapi.nets.faceLandmark68Net.loadFromUri('/models'),
-            faceapi.nets.faceRecognitionNet.loadFromUri('/models'),
-            faceapi.nets.faceExpressionNet.loadFromUri('/models'),
-          ]).then(() => {
-            faceDetection();
-            audioDetection();
-          })
-    }
-
-
-    const faceDetection = () => {
-        setInterval(async () => {
-            const nowTime = new Date();
-            setTimer(nowTime.getSeconds());
-            if(webcamRef.current) {
-                const webcamCurrent = webcamRef.current as any;
-                if(webcamCurrent.video.readyState === 4) {
-                    const video = webcamCurrent.video;
-                    const detections = await faceapi.detectAllFaces
-                        (video,new faceapi.TinyFaceDetectorOptions())
-                        .withFaceLandmarks()
-                        .withFaceExpressions();
-                    if(detections.length > 0) {
-                        const exp = detections[0].expressions;
-                        console.log(exp);
-                        setExpressions(exp);
-                        const nextChartData = defaultChartData;
-                        const data = [
-                            exp.angry ,
-                            exp.disgusted ,
-                            exp.fearful ,
-                            exp.happy ,
-                            exp.neutral ,
-                            exp.sad ,
-                            exp.surprised
-                        ];
-                        var faceEval:number = 0;
-                        for(var i:number = 0;i < 7;++i ) {
-                            nextChartData[i].data = data[i];
-                            if(i !== 4) faceEval += data[i];
-                            nextChartData[i].raderData = data[i] + defaultRaderData;
-                        }
-                        setFaceEvaluation(faceEval);
-                        setChartData(nextChartData);
-                    }
-                }
-            }
-            
-
-        },500);
-    };
-
-    const audioDetection = () => {
-        setInterval(async () => {
-            if(isCaptureEnableRef.current) {
-                const bufferLength = analyserNode.current?.frequencyBinCount;
-                const dataArray = new Uint8Array(bufferLength || 0);
-                analyserNode.current?.getByteTimeDomainData(dataArray);
-                setAudioData(dataArray);
-                renderAudioFrame(dataArray);
-            }
-        },200)
-    };
-
-    const renderAudioFrame = (data: Uint8Array) => {
-        const ctx = canvasRef.current!.getContext('2d')!;
-        const WIDTH = ctx.canvas.width;
-        const HEIGHT = ctx.canvas.height;
-        const dataLength = data.length;
-        const barWidth = WIDTH / dataLength;
-        ctx.fillStyle = '#1e1e1e';
-        ctx.fillRect(0, 0, WIDTH, HEIGHT);
-        var x:number = 0;
-        for (let i = 0; i < dataLength; i++) {
-            const barHeight = data[i]-128;
-
-            const r = barHeight + 25 * (i / dataLength);
-            const g = 250 * (i / dataLength);
-            const b = 50;
-
-            ctx.fillStyle = 'rgb(' + r + ',' + g + ',' + b + ')'
-            ctx.fillRect(x, HEIGHT / 2, barWidth, -barHeight*2);
-            ctx.fillRect(x, HEIGHT / 2, barWidth, barHeight*2);
-
-            x += barWidth + 1;
-        }
-        animeIdRef.current = requestAnimationFrame(() => renderAudioFrame(data));
-    };
-
-    useEffect(() => {
-		return () => {
-			if (animeIdRef.current) {
-				cancelAnimationFrame(animeIdRef.current)
-			}
-		}
-	}, []);
-
-    React.useEffect(() => {
-        loadModels();
-    },[]);
-
-    //chart settings
-
-    const labels:string[] = ["angry" ,"disgusted", "fearful", "happy", "neutral", "sad", "surprised"];
     const defaultChartData = [
         {
             expression: 'angry',
@@ -274,28 +102,257 @@ export const Top = () => {
         },
       ];
     const [chartData, setChartData] = React.useState(defaultChartData);
+    const {dataToSend, setDataToSend} = useSendData();
+    const [socket,reconnectSocket] = useRecoilState(connectWebsocketSelector);
+    
+
+    useEffect(() => {
+        isCaptureEnableRef.current = isCaptureEnable;
+      }, [isCaptureEnable]);
+    const webcamRef = React.useRef<Webcam>(null);
+    const [webcamReady, setWebcamReady] = React.useState<boolean>(false);
+    
+    const videoConstraints = {
+        width: 720,
+        height: 400,
+        deviceId: cameraDeviceId,
+        facingMode: "user"
+
+    };
+
+    const audioConstraints = {
+        audio: {
+            deviceId: audioDeviceId
+        }
+    }
+
+    const handleDevices = (mediaDevices:MediaDeviceInfo[]) => {
+        setCameraDevices(mediaDevices.filter((item) => item.kind === "videoinput"));
+        setAudioDevices(mediaDevices.filter((item) => item.kind === "audioinput"));
+        if(cameraDevices.length > 0 && audioDevices.length > 0)setBothDeviceFound(true);
+    };
+
+    const handleAudioSuccess = (stream:any) => {
+        setAudioTracks(stream.getAudioTracks());
+        audioContext.current = new AudioContext();
+        sourceNode.current = audioContext.current.createMediaStreamSource(stream);
+        analyserNode.current = audioContext.current.createAnalyser();
+        audioContext.current.resume();
+        analyserNode.current.fftSize = 128;
+        sourceNode.current.connect(analyserNode.current);
+    };
+
+    const handleAudioError = () => {
+
+    };
+
+    
+    React.useEffect(
+        () => {
+            audioTracks.forEach((track:any) => {track.stop()});
+            if(isCaptureEnable) {
+                navigator.mediaDevices.getUserMedia(
+                    audioConstraints
+                    )
+                    .then(handleAudioSuccess)
+                    .catch(handleAudioError);
+            }
+        },
+        [isCaptureEnable,audioDeviceId]
+    )
+
+    React.useEffect(
+        () => {
+            navigator.mediaDevices.enumerateDevices().then(handleDevices);
+            if(socket.readyState === socket.CLOSED) {
+                reconnectSocket(connectWebsocket());
+            }
+        },
+        [timer]
+    );
+
+
+    //face-api model
+    
+    const loadModels = async () => {
+        Promise.all([
+            faceapi.nets.tinyFaceDetector.loadFromUri('/models'),
+            faceapi.nets.faceLandmark68Net.loadFromUri('/models'),
+            faceapi.nets.faceRecognitionNet.loadFromUri('/models'),
+            faceapi.nets.faceExpressionNet.loadFromUri('/models'),
+          ]).then(async () => {
+            try {
+                const testData = await faceapi.fetchImage('/models/test.png')
+                await faceapi.detectAllFaces(testData,new faceapi.TinyFaceDetectorOptions())
+                    .withFaceLandmarks()
+                    .withFaceExpressions();
+            }catch (e){
+                console.log("error done");
+            }
+    
+            
+            setModelsLoaded(true);
+            faceDetection();
+            audioDetection();
+          })
+    }
+
+
+    const faceDetection = () => {
+        setInterval(async () => {
+            const nowTime = new Date();
+            setTimer(nowTime.getSeconds());
+            if(webcamRef.current) {
+                const webcamCurrent = webcamRef.current as any;
+                if(webcamCurrent.video.readyState === 4) {
+                    const video = webcamCurrent.video;
+                    const detections = await faceapi.detectAllFaces
+                        (video,new faceapi.TinyFaceDetectorOptions())
+                        .withFaceLandmarks()
+                        .withFaceExpressions();
+                    
+                    if(detections.length > 0) {
+                        const exp = detections[0].expressions;
+                        setExpressions(exp);
+                        const nextChartData = defaultChartData;
+                        const data = [
+                            exp.angry ,
+                            exp.disgusted ,
+                            exp.fearful ,
+                            exp.happy ,
+                            exp.neutral ,
+                            exp.sad ,
+                            exp.surprised
+                        ];
+                        var faceEval:number = 0;
+                        for(var i:number = 0;i < 7;++i ) {
+                            nextChartData[i].data = data[i];
+                            if(i !== 4) faceEval += data[i];
+                            nextChartData[i].raderData = data[i] + defaultRaderData;
+                        }
+                        setFaceEvaluation(faceEval);
+                        setChartData(nextChartData);
+                        setDataToSend(JSON.stringify(exp));
+
+                        
+                    }
+                    setWebcamReady(true);
+                }else{
+                    setWebcamReady(false);
+                }
+            }
+            
+
+        },500);
+    };
+
+    const audioDetection = () => {
+        setInterval(async () => {
+            if(isCaptureEnableRef.current) {
+                const bufferLength = analyserNode.current?.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength || 0);
+                analyserNode.current?.getByteTimeDomainData(dataArray);
+                setAudioData(dataArray);
+                renderAudioFrame(dataArray);
+            }
+        },200)
+    };
+
+    const renderAudioFrame = (data: Uint8Array) => {
+        const ctx = canvasRef.current!.getContext('2d')!;
+        const WIDTH = ctx.canvas.width;
+        const HEIGHT = ctx.canvas.height;
+        const dataLength = data.length;
+        const barWidth = WIDTH / dataLength;
+        ctx.fillStyle = '#1e1e1e';
+        ctx.fillRect(0, 0, WIDTH, HEIGHT);
+        var x:number = 0;
+        var soundStats:number = 0;
+        for (let i = 0; i < dataLength; i++) {
+            const barHeight = data[i]-128;
+            soundStats += barHeight;
+
+            const r = barHeight + 25 * (i / dataLength);
+            const g = 250 * (i / dataLength);
+            const b = 50;
+
+            ctx.fillStyle = 'rgb(' + r + ',' + g + ',' + b + ')'
+            ctx.fillRect(x, HEIGHT / 2, barWidth, -barHeight*2);
+            ctx.fillRect(x, HEIGHT / 2, barWidth, barHeight*2);
+
+            x += barWidth + 1;
+        }
+        //console.log(soundStats);
+        animeIdRef.current = requestAnimationFrame(() => renderAudioFrame(data));
+    };
+
+    useEffect(() => {
+		return () => {
+			if (animeIdRef.current) {
+				cancelAnimationFrame(animeIdRef.current)
+			}
+		}
+	}, []);
+
+    React.useEffect(() => {
+        loadModels();
+    },[]);
+
+    //chart settings
+
+    const labels:string[] = ["angry" ,"disgusted", "fearful", "happy", "neutral", "sad", "surprised"];
+    
 
 
     return (
         <>
+
         <header>
             <h1>meeting app</h1>
+            {socket.readyState === socket.OPEN ? 
+            (
+                <CloudIcon fontSize="large"/>
+            ) : (
+                <CloudOffIcon fontSize="large"/>
+            )}
         </header>
         
-        {isCaptureEnable || (
-                <Button variant="contained" color="primary" disabled={!bothDeviceFound} onClick={() => setCaptureEnable(true)}>
-                    {bothDeviceFound ? "ミーティングを開始する": "デバイス取得中...お待ちください"}
+        {isCaptureEnable ?
+        (
+            <Button variant="contained" color="secondary" onClick={() => setCaptureEnable(false)}>終了</Button>
+
+        ) : (
+
+                <Button variant="contained" color="primary" disabled={!bothDeviceFound || !modelsLoaded} onClick={() => setCaptureEnable(true)}>
+                    
+                    {(bothDeviceFound && modelsLoaded) ? "ミーティングを開始する": 
+                    (
+                        <>
+                        <Blocks
+                        visible={true}
+                        height="28"
+                        width="28"
+                        ariaLabel="blocks-loading"
+                        wrapperStyle={{}}
+                        wrapperClass="blocks-wrapper"
+                        />
+                        <div style={{width:"10px"}}></div>
+                        <div>
+                            {
+                                (bothDeviceFound ? "モデルをロード中..." : "デバイスを取得中...")
+                            }
+                        </div>
+                        </>
+                    )}
                 </Button>
         )}
-        <div className="wrapper">
-            
+        
+        <div style={{height: "20px"}}></div>
+        <div className="wrapper">     
             {isCaptureEnable && (
                 <>
-                <div style={{alignItems: 'center'}}>
-                    <Button variant="contained" color="primary" onClick={() => setCaptureEnable(false)}>終了</Button>
-                </div>
                 <div className="element">
-                <div>
+                <div style={{position: "relative"}}>
                     <Webcam
                     audio={false}
                     width={540}
@@ -303,6 +360,21 @@ export const Top = () => {
                     ref={webcamRef}
                     videoConstraints={videoConstraints}
                     />
+                    {
+                        webcamReady || (
+                            <div className="cameraloading">
+                            <Blocks
+                            visible={true}
+                            height="80"
+                            width="80"
+                            ariaLabel="blocks-loading"
+                            wrapperStyle={{}}
+                            wrapperClass="blocks-wrapper"
+                            />
+                            </div>
+                        )
+                    }
+                    
                 </div>
                 <div className="wrapper" >
                     <div className="element" style={{width: "200px"}}>
@@ -366,6 +438,8 @@ export const Top = () => {
                 </>
             )}
             </div>
+
+
         </>
     );
 }

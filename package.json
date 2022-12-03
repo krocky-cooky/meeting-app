@@ -1,17 +1,23 @@
 {
   "dependencies": {
     "@material-ui/core": "^4.12.4",
+    "@material-ui/icons": "^4.11.3",
     "@types/gl-react": "^3.15.4",
     "@types/gl-react-dom": "^3.15.4",
+    "@types/react-loader-spinner": "^4.0.0",
     "@types/react-router-dom": "^5.3.3",
     "@types/react-webcam": "^3.0.0",
     "@types/recharts": "^1.8.23",
+    "@types/recoil": "^0.0.9",
+    "@types/websocket": "^1.0.5",
     "buffer": "^6.0.3",
     "face-api.js": "^0.22.2",
     "gl-react": "^5.2.0",
     "gl-react-dom": "^5.2.1",
     "react-router-dom": "^6.4.1",
     "react-webcam": "7.0.1",
-    "recharts": "^2.1.14"
+    "recharts": "^2.1.14",
+    "recoil": "^0.7.6",
+    "websocket": "^1.0.34"
   }
 }
