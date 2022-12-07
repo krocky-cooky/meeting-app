@@ -22,7 +22,7 @@ import * as WebSocket from "websocket";
 // };
 
 export const connectWebsocket = (): WebSocket.w3cwebsocket => {
-    const targetIp:string = "localhost:9001";
+    const targetIp:string = "nw66veb21f.execute-api.ap-northeast-1.amazonaws.com/production";
     const socket = new WebSocket.w3cwebsocket(`wss://${targetIp}`);
     socket.onopen = () => {
         console.log("connected");
