@@ -40,6 +40,7 @@ export const Top = () => {
     const isCaptureEnableRef = React.useRef<boolean>(isCaptureEnable);
     const [timer, setTimer] = React.useState<number>(0);
     const [faceEvaluation, setFaceEvaluation] = React.useState<number>(0);
+    const [candidateId, setCandidateId] = React.useState<number>(0);
     const defaultRaderData = 0.5;
     const [expressions, setExpressions] = React.useState({
         angry: 0,
@@ -50,6 +51,7 @@ export const Top = () => {
         sad: 0,
         surprised: 0
     });
+    const [soundAmplitude, setSoundAmplitude] = React.useState<number[]>([]);
     const defaultChartData = [
         {
             expression: 'angry',
@@ -167,6 +169,19 @@ export const Top = () => {
             if(socket.readyState === socket.CLOSED) {
                 reconnectSocket(connectWebsocket());
             }
+            var message = {
+                expressions: expressions,
+                sound: soundAmplitude.reduce((a,x) =>{return a+x;},0)/soundAmplitude.length,
+                candidateId: candidateId
+            };
+
+            var sendingData = {
+                "action": "sendAndReceive",
+                "message": JSON.stringify(message)
+            }
+            if(isCaptureEnable) {
+                setDataToSend(JSON.stringify(sendingData));
+            }
         },
         [timer]
     );
@@ -176,13 +191,13 @@ export const Top = () => {
     
     const loadModels = async () => {
         Promise.all([
-            faceapi.nets.tinyFaceDetector.loadFromUri('/models'),
-            faceapi.nets.faceLandmark68Net.loadFromUri('/models'),
-            faceapi.nets.faceRecognitionNet.loadFromUri('/models'),
-            faceapi.nets.faceExpressionNet.loadFromUri('/models'),
+            faceapi.nets.tinyFaceDetector.loadFromUri('./models'),
+            faceapi.nets.faceLandmark68Net.loadFromUri('./models'),
+            faceapi.nets.faceRecognitionNet.loadFromUri('./models'),
+            faceapi.nets.faceExpressionNet.loadFromUri('./models'),
           ]).then(async () => {
             try {
-                const testData = await faceapi.fetchImage('/models/test.png')
+                const testData = await faceapi.fetchImage('./models/test.png')
                 await faceapi.detectAllFaces(testData,new faceapi.TinyFaceDetectorOptions())
                     .withFaceLandmarks()
                     .withFaceExpressions();
@@ -230,9 +245,9 @@ export const Top = () => {
                             if(i !== 4) faceEval += data[i];
                             nextChartData[i].raderData = data[i] + defaultRaderData;
                         }
+                        setExpressions(exp);
                         setFaceEvaluation(faceEval);
                         setChartData(nextChartData);
-                        setDataToSend(JSON.stringify(exp));
 
                         
                     }
@@ -270,7 +285,7 @@ export const Top = () => {
         var soundStats:number = 0;
         for (let i = 0; i < dataLength; i++) {
             const barHeight = data[i]-128;
-            soundStats += barHeight;
+            soundStats += Math.max(barHeight,0);
 
             const r = barHeight + 25 * (i / dataLength);
             const g = 250 * (i / dataLength);
@@ -284,6 +299,12 @@ export const Top = () => {
         }
         //console.log(soundStats);
         animeIdRef.current = requestAnimationFrame(() => renderAudioFrame(data));
+        var temp: number[] = soundAmplitude;
+        temp.push(soundStats)
+        if(temp.length > 20) {
+            temp.shift()
+        }
+        setSoundAmplitude(temp);
     };
 
     useEffect(() => {
@@ -346,7 +367,26 @@ export const Top = () => {
                     )}
                 </Button>
         )}
-        
+        <div style={{display: "flex",justifyContent: "center"}} >
+            <div style={{width: "200px"}}>
+                <FormControl fullWidth>
+                    <InputLabel>Candidate ID</InputLabel>
+                    <Select 
+                        label="Microphone"
+                        onChange={(event) => {setCandidateId(event.target.value as number);}}
+                        defaultValue={defaultAudioIndex}
+                        >
+                        {[1,2,3,4].map((id, key) => (
+                        <MenuItem  
+                            value={id}
+                        >
+                            {id}
+                        </MenuItem>
+                        ))}
+                    </Select>
+                </FormControl>
+            </div>
+        </div>
         <div style={{height: "20px"}}></div>
         <div className="wrapper">     
             {isCaptureEnable && (
